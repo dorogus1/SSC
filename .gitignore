@@ -1,1 +1,24 @@
 /.idea
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/ProiectPractic/login_page/node_modules
+/ProiectPractic/login_page/.pnp
+.pnp.js
+
+# testing
+/ProiectPractic/login_page/coverage
+
+# production
+/ProiectPractic/login_page/build
+
+# misc
+/ProiectPractic/login_page/.DS_Store
+/ProiectPractic/login_page/.env.local
+/ProiectPractic/login_page/.env.development.local
+/ProiectPractic/login_page/.env.test.local
+/ProiectPractic/login_page/.env.production.local
+
+/ProiectPractic/login_page/npm-debug.log*
+/ProiectPractic/login_page/yarn-debug.log*
+/ProiectPractic/login_page/yarn-error.log*
