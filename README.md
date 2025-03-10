@@ -1,2 +1,0 @@
-# SSC
-Tema SSC
