@@ -23,42 +23,66 @@ public class AuthController : ControllerBase
     {
         if (string.IsNullOrEmpty(model.Username) || string.IsNullOrEmpty(model.Password) || string.IsNullOrEmpty(model.Email))
         {
-            return BadRequest("Username, email and password are required");
+            return BadRequest("Username, email, and password are required");
         }
 
-        // Validate email format
         if (!IsValidEmail(model.Email))
         {
             return BadRequest("Invalid email format");
         }
 
-        // Check if user already exists
-        if (await _context.Users.AnyAsync(u => u.Username == model.Username || u.Email == model.Email))
+        if (await _context.Users.AnyAsync(u => u.Username == model.Username) ||
+            await _context.Users.AnyAsync(u => u.Email == model.Email))
         {
             return BadRequest("Username or email is already taken");
         }
 
-        // Create and save new user
         var user = new User
         {
             Username = model.Username,
             Email = model.Email,
-            PasswordHash = HashPassword(model.Password)
+            PasswordHash = HashPassword(model.Password),
+            VerificationCode = new Random().Next(100000, 999999).ToString(),
+            IsVerified = false,
+            LoginVerificationCode = new Random().Next(100000, 999999).ToString()
         };
 
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "User registered successfully" });
+        var emailService = new EmailService();
+        await emailService.SendVerificationEmailAsync(user.Email, user.VerificationCode);
+
+        return Ok(new { message = "User registered successfully. Please verify your email." });
+    }
+
+    [HttpPost("verify-email")]
+    public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailModel model)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
+        if (user == null)
+        {
+            return BadRequest("Invalid email.");
+        }
+
+        if (user.VerificationCode != model.VerificationCode)
+        {
+            return BadRequest("Invalid verification code.");
+        }
+
+        user.IsVerified = true;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Email verified successfully!" });
     }
 
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] UserLoginModel model)
+    public async Task<IActionResult> Login([FromBody] LoginRequestModel model)
     {
         if (string.IsNullOrEmpty(model.UsernameOrEmail) || string.IsNullOrEmpty(model.Password))
-            {
-                return BadRequest("Username/email and password are required");
-            }
+        {
+            return BadRequest("Username/email and password are required");
+        }
 
         var user = await _context.Users.FirstOrDefaultAsync(u =>
             u.Username == model.UsernameOrEmail ||
@@ -66,26 +90,49 @@ public class AuthController : ControllerBase
 
         if (user != null && VerifyPassword(model.Password, user.PasswordHash))
         {
-            // Token generation code remains the same
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(SecretKey);
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.Name, user.Username)
-                }),
-                Expires = DateTime.UtcNow.AddHours(1),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-            };
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return Ok(new { token = tokenHandler.WriteToken(token) });
+            var verificationCode = new Random().Next(100000, 999999).ToString();
+            user.LoginVerificationCode = verificationCode;
+            await _context.SaveChangesAsync();
+
+            var emailService = new EmailService();
+            await emailService.SendAuthAsync(user.Email, verificationCode);
+
+            return Ok(new { message = "Verification code sent to email." });
         }
 
         return Unauthorized("Invalid credentials");
     }
 
-    // Helper method to validate email format
+    [HttpPost("login_verification")]
+    public async Task<IActionResult> LoginVerification([FromBody] LoginVerificationModel model)
+    {
+
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == model.Email || u.Username == model.Username);
+        if (user == null)
+        {
+            return BadRequest("Invalid email.");
+        }
+
+        if (user.LoginVerificationCode != model.VerificationCode)
+        {
+            return BadRequest("Invalid verification code.");
+        }
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.UTF8.GetBytes(SecretKey);
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, user.Username) }),
+            Expires = DateTime.UtcNow.AddHours(1),
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        };
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+
+        return Ok(new { token = tokenHandler.WriteToken(token) });
+    }
+
+
+
     private bool IsValidEmail(string email)
     {
         try {
@@ -112,8 +159,15 @@ public class AuthController : ControllerBase
     }
 }
 
-public class UserLoginModel
+public class VerifyEmailModel
 {
-    public string UsernameOrEmail { get; set; }
-    public string Password { get; set; }
+    public string Email { get; set; }
+    public string VerificationCode { get; set; }
+}
+
+public class LoginVerificationModel
+{
+    public string Email { get; set; }
+    public string Username { get; set; }
+    public string VerificationCode { get; set; }
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 
 const Register = () => {
@@ -15,20 +15,24 @@ const Register = () => {
                 email,
                 password
             });
-            alert("Cont creat! Acum te poți loga.");
-            navigate("/");
-        } catch (error) {
-            alert("Eroare la înregistrare!");
+
+            alert("Cont creat! Introdu codul de verificare primit pe email.");
+            navigate(`/verify?email=${encodeURIComponent(email)}`);
+        } catch (error: unknown) {
+            const err = error as AxiosError;
+            alert(err.response?.data);
         }
     };
 
     return (
-        <div>
+        <div className="auth-container">
             <h2>Register</h2>
+            <div className="input-group">
             <input type="text" placeholder="Username" onChange={(e) => setUsername(e.target.value)} />
             <input type="email" placeholder="Email" onChange={(e) => setEmail(e.target.value)} />
             <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} />
             <button onClick={handleRegister}>Register</button>
+            </div>
         </div>
     );
 };

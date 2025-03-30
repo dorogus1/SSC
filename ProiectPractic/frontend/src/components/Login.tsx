@@ -1,23 +1,39 @@
 import { useState } from "react";
-import axios from "axios";
+import axios, {AxiosError} from "axios";
 import { useNavigate } from "react-router-dom";
 import "./styles.css";
 
 const Login = () => {
-    const [username, setUsername] = useState("");
+    const [usernameOrEmail, setUsernameOrEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [verificationCode, setVerificationCode] = useState("");
+    const [step, setStep] = useState(1);
     const navigate = useNavigate();
 
     const handleLogin = async () => {
         try {
-            const response = await axios.post("http://localhost:5274/api/auth/login", {
-                usernameOrEmail: username,
+            await axios.post("http://localhost:5274/api/auth/login", {
+                usernameOrEmail,
                 password
+            });
+            setStep(2);
+        } catch (error) {
+            alert("Autentificare eșuată! Verificați datele introduse.");
+        }
+    };
+
+    const handleVerification = async () => {
+        try {
+            const response = await axios.post("http://localhost:5274/api/auth/login_verification", {
+                email: usernameOrEmail,
+                verificationCode,
+                username: usernameOrEmail
             });
             localStorage.setItem("token", response.data.token);
             navigate("/home");
-        } catch (error) {
-            alert("Autentificare eșuată!");
+        } catch (error: unknown) {
+            const err = error as AxiosError;
+            alert(err.response?.data);
         }
     };
 
@@ -27,17 +43,30 @@ const Login = () => {
 
     return (
         <div className="auth-container">
-            <h2>Login</h2>
-            <div className="input-group">
-                <label>Username</label>
-                <input type="text" placeholder="Username" onChange={(e) => setUsername(e.target.value)} />
-            </div>
-            <div className="input-group">
-                <label>Password</label>
-                <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} />
-            </div>
-            <button onClick={handleLogin}>Login</button>
-            <button onClick={goToRegister}>Register</button>
+            {step === 1 ? (
+                <>
+                    <h2>Login</h2>
+                    <div className="input-group">
+                        <label>Username or Email</label>
+                        <input type="text" placeholder="Username or Email" onChange={(e) => setUsernameOrEmail(e.target.value)} />
+                    </div>
+                    <div className="input-group">
+                        <label>Password</label>
+                        <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} />
+                    </div>
+                    <button onClick={handleLogin}>Next</button>
+                    <button onClick={goToRegister}>Register</button>
+                </>
+            ) : (
+                <>
+                    <h2>Enter Verification Code</h2>
+                    <div className="input-group">
+                        <label>Verification Code</label>
+                        <input type="text" placeholder="Enter Code" onChange={(e) => setVerificationCode(e.target.value)} />
+                    </div>
+                    <button onClick={handleVerification}>Verify</button>
+                </>
+            )}
         </div>
     );
 };
