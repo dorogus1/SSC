@@ -5,17 +5,20 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 
 [ApiController]
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly TotpService _totpService;
     private const string SecretKey = "ThisIsAVerySecureKeyWithAtLeast32Characters1234567890";
 
-    public AuthController(ApplicationDbContext context)
+    public AuthController(ApplicationDbContext context, TotpService totpService)
     {
         _context = context;
+        _totpService = totpService;
     }
 
     [HttpPost("register")]
@@ -157,6 +160,98 @@ public class AuthController : ControllerBase
     {
         return HashPassword(password) == hash;
     }
+
+    [HttpPost("enable-totp")]
+    [Authorize]
+    public async Task<IActionResult> EnableTotp()
+    {
+        // Get the username from the token
+        var username = User.Identity.Name;
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+
+        if (user == null)
+        {
+            return NotFound("User not found");
+        }
+
+        // Generate a new secret key
+        var secretKey = _totpService.GenerateSecretKey();
+        user.TotpSecretKey = secretKey;
+
+        await _context.SaveChangesAsync();
+
+        // Generate QR code
+        var qrCodeBytes = _totpService.GenerateQrCodeBytes(secretKey, user.Username);
+
+        return Ok(new 
+        { 
+            secretKey = secretKey,
+            qrCodeBase64 = Convert.ToBase64String(qrCodeBytes)
+        });
+    }
+
+    [HttpPost("verify-totp")]
+    [Authorize]
+    public async Task<IActionResult> VerifyTotp([FromBody] VerifyTotpModel model)
+    {
+        // Get the username from the token
+        var username = User.Identity.Name;
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+
+        if (user == null)
+        {
+            return NotFound("User not found");
+        }
+
+        // Verify the TOTP code
+        if (!_totpService.VerifyTotp(user.TotpSecretKey, model.TotpCode))
+        {
+            return BadRequest("Invalid TOTP code");
+        }
+
+        // Enable TOTP for the user
+        user.IsTotpEnabled = true;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "TOTP authentication enabled successfully" });
+    }
+
+    [HttpPost("login-with-totp")]
+    public async Task<IActionResult> LoginWithTotp([FromBody] LoginWithTotpModel model)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u => 
+            u.Username == model.UsernameOrEmail || 
+            u.Email == model.UsernameOrEmail);
+
+        if (user == null)
+        {
+            return BadRequest("Invalid username or email");
+        }
+
+        if (!user.IsTotpEnabled)
+        {
+            return BadRequest("TOTP authentication is not enabled for this user");
+        }
+
+        // Verify the TOTP code
+        if (!_totpService.VerifyTotp(user.TotpSecretKey, model.TotpCode))
+        {
+            return BadRequest("Invalid TOTP code");
+        }
+
+        // Generate JWT token
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.UTF8.GetBytes(SecretKey);
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, user.Username) }),
+            Expires = DateTime.UtcNow.AddHours(1),
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        };
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+
+        return Ok(new { token = tokenHandler.WriteToken(token) });
+    }
 }
 
 public class VerifyEmailModel
@@ -170,4 +265,15 @@ public class LoginVerificationModel
     public string Email { get; set; }
     public string Username { get; set; }
     public string VerificationCode { get; set; }
+}
+
+public class VerifyTotpModel
+{
+    public string TotpCode { get; set; }
+}
+
+public class LoginWithTotpModel
+{
+    public string UsernameOrEmail { get; set; }
+    public string TotpCode { get; set; }
 }

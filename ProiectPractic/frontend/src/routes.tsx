@@ -3,6 +3,7 @@ import Login from "./components/Login";
 import Register from "./components/Register";
 import Home from "./components/Home";
 import VerifyEmail from "./components/VerifyEmail";
+import TotpSetup from "./components/TotpSetup";
 
 const AppRoutes = () => {
     return (
@@ -12,6 +13,7 @@ const AppRoutes = () => {
                 <Route path="/register" element={<Register />} />
                 <Route path="/home" element={<Home />} />
                 <Route path={"/verify"} element={<VerifyEmail />} />
+                <Route path="/setup-totp" element={<TotpSetup />} />
             </Routes>
         </Router>
     );

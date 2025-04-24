@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
-
+import "./styles.css";
 
 const Home = () => {
     const [username, setUsername] = useState("");
@@ -28,10 +27,23 @@ const Home = () => {
         navigate("/");
     };
 
+    const handleSetupTotp = () => {
+        navigate("/setup-totp");
+    };
+
     return (
-        <div>
-            <h2>Bine ai venit, {username}!</h2>
-            <button onClick={handleLogout}>Logout</button>
+        <div className="home-container">
+            <h2>Welcome, {username}!</h2>
+            <div className="home-actions">
+                <div className="action-card">
+                    <h3>Security Settings</h3>
+                    <p>Enhance your account security by setting up two-factor authentication</p>
+                    <button onClick={handleSetupTotp} className="primary-button">
+                        Set Up QR Code Authentication
+                    </button>
+                </div>
+            </div>
+            <button onClick={handleLogout} className="logout-button">Logout</button>
         </div>
     );
 };

@@ -8,7 +8,6 @@ public class EmailService
     private readonly int _smtpPort = 587; // Usually 587 for TLS, or 465 for SSL
     private readonly string _smtpUser = Environment.GetEnvironmentVariable("SMTP_USER");
     private readonly string _smtpPass = Environment.GetEnvironmentVariable("SMTP_PASS");
-
     public async Task SendVerificationEmailAsync(string recipientEmail, string verificationCode)
     {
         var message = new MimeMessage();
